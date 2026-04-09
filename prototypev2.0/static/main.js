@@ -435,21 +435,70 @@ function exportData(type) {
         return;
     }
 
-    let content = "Timestamp, Emotion, Confidence\n";
+    let content = "Timestamp,Emotion,Confidence\n";
     let current = sessionLog.head;
-    while(current) {
-        content += `${current.data.timestamp.toISOString()}, ${current.data.label}, ${current.data.confidence}\n`;
+
+    while (current) {
+        let raw = current.data.timestamp;
+        let date;
+
+        // Handle time-only strings (e.g., "2:44:51 PM")
+        if (typeof raw === "string" && (raw.includes("AM") || raw.includes("PM"))) {
+            let today = new Date();
+
+            let [time, modifier] = raw.split(' ');
+            let [hours, minutes, seconds] = time.split(':');
+
+            hours = parseInt(hours);
+            minutes = parseInt(minutes);
+            seconds = parseInt(seconds);
+
+            if (modifier === 'PM' && hours !== 12) hours += 12;
+            if (modifier === 'AM' && hours === 12) hours = 0;
+
+            date = new Date(
+                today.getFullYear(),
+                today.getMonth(),
+                today.getDate(),
+                hours,
+                minutes,
+                seconds
+            );
+        } else {
+            date = (raw instanceof Date) ? raw : new Date(raw);
+        }
+
+        let formatted;
+
+        if (isNaN(date)) {
+            formatted = raw; // fallback
+        } else {
+            const pad = (n) => n.toString().padStart(2, '0');
+
+            formatted =
+                `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ` +
+                `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+        }
+
+        content += `${formatted},${current.data.label},${current.data.confidence}\n`;
         current = current.next;
     }
 
-    let filename = (type === 'psych') ? "clinical_data_log.csv" : "emotion_log.csv";
+    let filename = (type === 'psych')
+        ? "clinical_data_log.csv"
+        : "emotion_log.csv";
 
-    const blob = new Blob([content], { type: 'text/csv' });
-    const url  = window.URL.createObjectURL(blob);
-    const a    = document.createElement('a');
-    a.href     = url;
+    // Fix Excel encoding issues
+    const blob = new Blob(["\ufeff" + content], { type: 'text/csv;charset=utf-8;' });
+    const url = window.URL.createObjectURL(blob);
+
+    const a = document.createElement('a');
+    a.href = url;
     a.download = filename;
     a.click();
+
+    window.URL.revokeObjectURL(url);
+
     alert(`Data exported successfully as ${filename}!`);
 }
 
